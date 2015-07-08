@@ -22,9 +22,25 @@ class _TransitionObjectMixin(SingleObjectMixin):
                           'Please update view %s to use \'get_queryset()\' or '
                           '\'get_object()\'.' % self.__class__.__name__,
                           DeprecationWarning)
-            if queryset is None:
+            if not queryset:
                 queryset = self.get_queryset()
-            return queryset.get(**filter_kwargs())
+            model = self.model
+            try:
+                obj = queryset.get(**self.filter_kwargs())
+            except self.model.DoesNotExist:
+                obj = None
+            if obj:
+                return obj
+            queryset = self.model.objects.untranslated()
+            try:
+                obj = queryset.get(**self.filter_kwargs())
+            except model.DoesNotExist:
+                return None
+            new_translation = model._meta.translations_model()
+            new_translation.language_code = self._language(self.request)
+            new_translation.master = obj
+            setattr(obj, model._meta.translations_cache, new_translation)
+            return obj
 
         elif (self.pk_url_kwarg == 'pk' and 'object_id' in self.kwargs and 'pk' not in self.kwargs):
             # raise in 1.3, remove in 1.5
